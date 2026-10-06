@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Chef — AI Food Scanner & Recipe Generator</title>
+  <meta name="description" content="Scan your fruits and vegetables in real-time with Computer Vision and discover automatic recipes with Artificial Intelligence.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            neon: {
+              green: '#00ff88',
+              emerald: '#10b981',
+              glow: 'rgba(0, 255, 136, 0.4)'
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scanline': 'scan 2.5s ease-in-out infinite'
+          },
+          keyframes: {
+            scan: {
+              '0%, 100%': { transform: 'translateY(0%)' },
+              '50%': { transform: 'translateY(100%)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Glassmorphism custom styles */
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card-hover {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card-hover:hover {
+      transform: translateY(-3px);
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.5), 0 0 20px -4px rgba(99, 102, 241, 0.2);
+    }
+    .neon-border {
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white flex flex-col font-sans">
+
+  <!-- Ambient Glow Background -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px]"></div>
+    <div class="absolute top-1/3 -right-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-[140px]"></div>
+    <div class="absolute bottom-10 left-1/3 w-80 h-80 bg-violet-600/15 rounded-full blur-[120px]"></div>
+  </div>
+
+  <!-- Header / Navigation -->
+  <header class="sticky top-0 z-40 w-full glass-card border-b border-slate-800/80 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-500/30 flex items-center justify-center">
+          <div class="h-full w-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+            <i class="fa-solid fa-utensils text-emerald-400 text-lg"></i>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">Smart Chef</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">AI Vision 2.0</span>
+          </div>
+          <p class="text-xs text-slate-400">Roboflow Inference ➔ RapidAPI Spoonacular</p>
+        </div>
+      </div>
+
+      <!-- Status Indicator -->
+      <div class="flex items-center gap-3">
+        <div id="statusPill" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 border border-slate-800 text-slate-300">
+          <span class="relative flex h-2 w-2">
+            <span id="pingDot" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span id="staticDot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span id="statusText">APIs Connected</span>
+        </div>
+
+        <a href="https://github.com" target="_blank" class="p-2 text-slate-400 hover:text-white transition-colors" title="View on GitHub">
+          <i class="fa-brands fa-github text-xl"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="flex-grow z-10 max-w-7xl mx-auto px-4 lg:px-8 py-8 w-full">
+    
+    <!-- Title & Presentation -->
+    <div class="text-center max-w-3xl mx-auto mb-10">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-700/40 text-indigo-300 text-xs font-semibold mb-4">
+        <i class="fa-solid fa-bolt text-indigo-400"></i> Live Ingredient Vision & Automatic Recipe Recommendation
+      </div>
+      <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
+        From <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-indigo-400">Camera to Table</span> in Seconds
+      </h1>
+      <p class="text-slate-400 text-sm sm:text-base leading-relaxed">
+        Upload or snap a photo of your fresh ingredients. Computer vision automatically detects the fruits and vegetables, queries the Spoonacular culinary engine, and generates tailored recipes instantly.
+      </p>
+    </div>
+
+    <!-- Alert / Configuration Banner (Conditional) -->
+    <div id="apiConfigNotice" class="hidden mb-8 p-4 rounded-xl glass-card border-amber-500/30 bg-amber-950/20 text-amber-200 flex items-start gap-3">
+      <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg mt-0.5"></i>
+      <div class="text-sm">
+        <p class="font-semibold text-amber-300">Demo Mode Active</p>
+        <p class="text-amber-200/80 mt-0.5">To enable live inference with your own accounts, add your keys to <code class="bg-black/40 px-1 py-0.5 rounded font-mono">ROBOFLOW_API_KEY</code> and <code class="bg-black/40 px-1 py-0.5 rounded font-mono">RAPIDAPI_KEY</code> in your <code class="bg-black/40 px-1 py-0.5 rounded font-mono">.env</code> file.</p>
+      </div>
+    </div>
+
+    <!-- Scanner & Interactive Canvas Workspace -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-12">
+      
+      <!-- Left Column: Upload & Canvas Inspection (7 cols) -->
+      <div class="lg:col-span-7 space-y-5">
+        
+        <!-- Upload Card -->
+        <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+          
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-camera-retro text-indigo-400"></i>
+              Ingredient Scanner
+            </h2>
+            <span class="text-xs text-slate-400">JPG, PNG or WEBP (up to 25MB)</span>
+          </div>
+
+          <!-- Drag and Drop Area -->
+          <div id="dropZone" class="group relative border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 bg-slate-900/40 hover:bg-slate-900/80">
+            <input type="file" id="fileInput" accept="image/*" class="hidden">
+            
+            <div class="flex flex-col items-center justify-center space-y-3">
+              <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 group-hover:bg-indigo-500/20 text-indigo-400 flex items-center justify-center transition-transform group-hover:scale-110 duration-200 border border-indigo-500/20">
+                <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-200 group-hover:text-indigo-300">
+                  Click to upload or drag and drop your image here
+                </p>
+                <p class="text-xs text-slate-400 mt-1">Supports high-res photos directly from mobile smartphones or webcams</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Test Presets (Hackathon Quick Demo) -->
+          <div class="mt-4 pt-4 border-t border-slate-800/80">
+            <p class="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> No photo handy? Test with instant demo presets:
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="loadSampleImage('apple_banana')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-indigo-900/40 border border-slate-700 hover:border-indigo-500/50 text-slate-300 hover:text-white transition-all flex items-center gap-1.5">
+                🍎 🍌 Apple & Banana
+              </button>
+              <button type="button" onclick="loadSampleImage('tomatoes_lettuce')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-emerald-900/40 border border-slate-700 hover:border-emerald-500/50 text-slate-300 hover:text-white transition-all flex items-center gap-1.5">
+                🍅 🥗 Tomatoes & Salad
+              </button>
+              <button type="button" onclick="loadSampleImage('carrots_oranges')" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-900/40 border border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-white transition-all flex items-center gap-1.5">
+                🥕 🍊 Carrots & Oranges
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas Inspection Viewport -->
+        <div id="canvasContainer" class="glass-card rounded-2xl p-5 relative overflow-hidden">
+          
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+              <h3 class="text-sm font-semibold text-slate-200">Computer Vision Viewport (HTML5 Canvas)</h3>
+            </div>
+            <div id="canvasMeta" class="text-xs font-mono text-slate-400 hidden">
+              <!-- Dimensions & count -->
+            </div>
+          </div>
+
+          <!-- Canvas Element -->
+          <div class="relative w-full rounded-xl overflow-hidden bg-slate-900/90 border border-slate-800 min-h-[300px] flex items-center justify-center">
+            
+            <!-- Placeholder State -->
+            <div id="canvasPlaceholder" class="p-8 text-center text-slate-500">
+              <i class="fa-solid fa-shapes text-4xl mb-3 text-slate-600 block"></i>
+              <p class="text-sm">Select or upload an image to start visual ingredient detection</p>
+            </div>
+
+            <!-- Scanning Animation Overlay -->
+            <div id="scanningOverlay" class="hidden absolute inset-0 z-20 pointer-events-none bg-indigo-950/20 backdrop-blur-[2px]">
+              <div class="w-full h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#00ff88] animate-scanline"></div>
+            </div>
+
+            <!-- HTML5 Canvas -->
+            <canvas id="detectionCanvas" class="max-w-full h-auto hidden rounded-lg"></canvas>
+          </div>
+
+          <!-- Canvas Controls & Legends -->
+          <div id="canvasControls" class="hidden mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+            <div class="flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded-sm bg-neon-green/30 border border-neon-green"></span>
+              <span>Neon Green Bounding Boxes (Roboflow Serverless)</span>
+            </div>
+            <button onclick="resetApp()" class="text-slate-400 hover:text-white transition-colors flex items-center gap-1">
+              <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Pipeline, Stats & Detected Ingredients (5 cols) -->
+      <div class="lg:col-span-5 space-y-5">
+
+        <!-- Processing State Card (Visible during inference) -->
+        <div id="processingCard" class="hidden glass-card rounded-2xl p-6 border-indigo-500/40">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="animate-spin text-indigo-400 text-2xl">
+              <i class="fa-solid fa-circle-notch"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-white text-base">Processing AI Pipeline...</h4>
+              <p id="processingStepText" class="text-xs text-indigo-300">Connecting to Roboflow Serverless Inference...</p>
+            </div>
+          </div>
+
+          <!-- Step Progression Progress -->
+          <div class="space-y-2 mt-4 text-xs">
+            <div id="step1" class="flex items-center gap-2 text-slate-400">
+              <i class="fa-regular fa-circle text-[10px]"></i>
+              <span>1. Image intake & Base64 sanitization</span>
+            </div>
+            <div id="step2" class="flex items-center gap-2 text-slate-400">
+              <i class="fa-regular fa-circle text-[10px]"></i>
+              <span>2. Object detection with Roboflow Inference API</span>
+            </div>
+            <div id="step3" class="flex items-center gap-2 text-slate-400">
+              <i class="fa-regular fa-circle text-[10px]"></i>
+              <span>3. Recipe query on Spoonacular via RapidAPI</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry & Performance Stats -->
+        <div id="statsCard" class="hidden glass-card rounded-2xl p-6">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-chart-simple text-indigo-400"></i> Analysis Telemetry
+          </h3>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span id="statIngredients" class="text-2xl font-black text-emerald-400 font-mono">0</span>
+              <p class="text-[11px] text-slate-400 mt-1">Ingredients</p>
+            </div>
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span id="statBoxes" class="text-2xl font-black text-indigo-400 font-mono">0</span>
+              <p class="text-[11px] text-slate-400 mt-1">Bounding Boxes</p>
+            </div>
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span id="statLatency" class="text-2xl font-black text-amber-400 font-mono">0ms</span>
+              <p class="text-[11px] text-slate-400 mt-1">Latency</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detected Ingredients Badges -->
+        <div id="ingredientsCard" class="glass-card rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-white text-base flex items-center gap-2">
+              <i class="fa-solid fa-basket-shopping text-emerald-400"></i>
+              Detected Ingredients
+            </h3>
+            <span id="ingredientCountBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">0</span>
+          </div>
+
+          <div id="ingredientsList" class="flex flex-wrap gap-2 min-h-[60px] items-center">
+            <p class="text-xs text-slate-500 italic">No ingredients identified yet.</p>
+          </div>
+        </div>
+
+        <!-- Information / Architecture Card -->
+        <div class="glass-card rounded-2xl p-5 border-slate-800/80">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-network-wired text-indigo-400"></i> Chained API Pipeline
+          </h4>
+          <div class="space-y-2 text-xs text-slate-400">
+            <div class="flex items-start gap-2">
+              <span class="text-emerald-400 font-bold">➔</span>
+              <span><strong>API 1:</strong> Roboflow inspects raw Base64 and returns bounding boxes + labels (<code class="text-slate-300">apple, banana, tomato...</code>).</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-indigo-400 font-bold">➔</span>
+              <span><strong>API 2:</strong> Spoonacular on RapidAPI receives normalized ingredients and returns tailored recipes.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Recipes Section -->
+    <section id="recipesSection" class="mt-8">
+      
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-2xl font-extrabold text-white flex items-center gap-3">
+            <i class="fa-solid fa-fire-burner text-amber-400"></i>
+            Suggested Recipes
+          </h2>
+          <p class="text-sm text-slate-400 mt-0.5">Automatically recommended from ingredients recognized by computer vision</p>
+        </div>
+        <div id="recipesMetaPill" class="hidden text-xs px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-medium">
+          <!-- Total recipes -->
+        </div>
+      </div>
+
+      <!-- Recipes Grid -->
+      <div id="recipesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Empty / Initial Placeholder State -->
+        <div class="col-span-full glass-card rounded-2xl p-12 text-center text-slate-500">
+          <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-600 flex items-center justify-center mx-auto mb-4 text-2xl">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+          <h4 class="text-slate-300 font-semibold mb-1">No recipes generated yet</h4>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">Upload an image of your ingredients or click one of the test presets above to discover personalized dishes.</p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Recipe Details Modal -->
+  <div id="recipeModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="glass-card max-w-2xl w-full rounded-2xl border-slate-700 overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col">
+      <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+        <h3 id="modalTitle" class="text-lg font-bold text-white">Recipe Title</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-4 flex-grow" id="modalContent">
+        <!-- Dynamic content -->
+      </div>
+      <div class="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-end gap-3">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300">Close</button>
+        <a id="modalExternalBtn" href="#" target="_blank" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5">
+          <span>View Full Recipe</span>
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-900 bg-slate-950/80 px-4 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p>Smart Chef © 2026 — Hackathon Production Chained APIs Solution</p>
+      <div class="flex items-center gap-4 text-slate-400">
+        <span>Roboflow Inference API</span>
+        <span>•</span>
+        <span>Spoonacular RapidAPI</span>
+        <span>•</span>
+        <span>Node.js & Canvas</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Main Frontend Application Logic -->
+  <script>
+    // Elements References
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const canvas = document.getElementById('detectionCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasPlaceholder = document.getElementById('canvasPlaceholder');
+    const canvasMeta = document.getElementById('canvasMeta');
+    const canvasControls = document.getElementById('canvasControls');
+    const scanningOverlay = document.getElementById('scanningOverlay');
+    
+    const processingCard = document.getElementById('processingCard');
+    const processingStepText = document.getElementById('processingStepText');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+
+    const statsCard = document.getElementById('statsCard');
+    const statIngredients = document.getElementById('statIngredients');
+    const statBoxes = document.getElementById('statBoxes');
+    const statLatency = document.getElementById('statLatency');
+
+    const ingredientsCard = document.getElementById('ingredientsCard');
+    const ingredientsList = document.getElementById('ingredientsList');
+    const ingredientCountBadge = document.getElementById('ingredientCountBadge');
+
+    const recipesGrid = document.getElementById('recipesGrid');
+    const recipesMetaPill = document.getElementById('recipesMetaPill');
+    const apiConfigNotice = document.getElementById('apiConfigNotice');
+
+    let currentLoadedImage = null;
+    let currentRecipesData = [];
+
+    // Check backend API status on start
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch('/api/config-status');
+        const data = await res.json();
+        if (!data.ready) {
+          apiConfigNotice.classList.remove('hidden');
+          const pingDot = document.getElementById('pingDot');
+          const staticDot = document.getElementById('staticDot');
+          const statusText = document.getElementById('statusText');
+          if (pingDot) pingDot.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
+          if (staticDot) staticDot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
+          if (statusText) statusText.innerText = "Demo Mode Active";
+        }
+      } catch (e) {
+        console.warn('Could not check backend configuration status:', e);
+      }
+    }
+    checkBackendStatus();
+
+    // Drag and Drop Listeners
+    dropZone.addEventListener('click', () => fileInput.click());
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-indigo-500', 'bg-indigo-950/20');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-indigo-500', 'bg-indigo-950/20');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFileSelection(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleFileSelection(e.target.files[0]);
+      }
+    });
+
+    // File Selection Handler with Client-side auto-optimization for Vercel
+    function handleFileSelection(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file (JPG, PNG, WEBP).');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawBase64 = event.target.result;
+        // Optimize large images to ensure they stay well under Vercel's 4.5MB serverless limit
+        optimizeImageForUpload(rawBase64, (optimizedBase64) => {
+          processImage(optimizedBase64);
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Helper to resize oversized photos (e.g. 12MB+ phone photos) to max 1600px
+    function optimizeImageForUpload(base64Str, callback) {
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const maxDim = 1600;
+        let w = tempImg.width;
+        let h = tempImg.height;
+
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+          const optCanvas = document.createElement('canvas');
+          optCanvas.width = w;
+          optCanvas.height = h;
+          const optCtx = optCanvas.getContext('2d');
+          optCtx.drawImage(tempImg, 0, 0, w, h);
+          callback(optCanvas.toDataURL('image/jpeg', 0.88));
+        } else {
+          callback(base64Str);
+        }
+      };
+      tempImg.src = base64Str;
+    }
+
+    // Process & Analyze Image Flow
+    async function processImage(base64Image) {
+      // Show scanning and loader
+      showProcessingState(true);
+      updateStep(1);
+
+
+      // Load Image in HTML Image element for Canvas rendering
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        currentLoadedImage = img;
+        drawInitialImage(img);
+
+        try {
+          updateStep(2);
+          const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ imageBase64: base64Image })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || result.details || 'Unknown error analyzing image.');
+          }
+
+          updateStep(3);
+
+          // Render canvas bounding boxes
+          drawBoundingBoxes(img, result.predictions || []);
+
+          // Render UI details
+          renderIngredients(result.ingredients || []);
+          renderStats(result.stats || {});
+          renderRecipes(result.recipes || []);
+
+        } catch (error) {
+          console.error('Error during analysis:', error);
+          alert('Error processing image: ' + error.message);
+        } finally {
+          showProcessingState(false);
+        }
+      };
+
+      img.src = base64Image;
+    }
+
+    // Step updater for UI
+    function updateStep(stepNumber) {
+      const reset = (el) => {
+        el.className = "flex items-center gap-2 text-slate-400";
+        el.querySelector('i').className = "fa-regular fa-circle text-[10px]";
+      };
+      const active = (el) => {
+        el.className = "flex items-center gap-2 text-indigo-400 font-semibold";
+        el.querySelector('i').className = "fa-solid fa-spinner fa-spin text-[10px]";
+      };
+      const done = (el) => {
+        el.className = "flex items-center gap-2 text-emerald-400";
+        el.querySelector('i').className = "fa-solid fa-check text-[10px]";
+      };
+
+      if (stepNumber === 1) {
+        active(step1);
+        reset(step2);
+        reset(step3);
+        processingStepText.innerText = "1. Processing image and sanitizing Base64 payload...";
+      } else if (stepNumber === 2) {
+        done(step1);
+        active(step2);
+        reset(step3);
+        processingStepText.innerText = "2. Detecting fruits and vegetables with Roboflow Inference API...";
+      } else if (stepNumber === 3) {
+        done(step1);
+        done(step2);
+        active(step3);
+        processingStepText.innerText = "3. Fetching suggested recipes from Spoonacular RapidAPI...";
+      }
+    }
+
+    function showProcessingState(isProcessing) {
+      if (isProcessing) {
+        processingCard.classList.remove('hidden');
+        scanningOverlay.classList.remove('hidden');
+      } else {
+        processingCard.classList.add('hidden');
+        scanningOverlay.classList.add('hidden');
+      }
+    }
+
+    // Canvas: Draw Initial Image
+    function drawInitialImage(img) {
+      canvasPlaceholder.classList.add('hidden');
+      canvas.classList.remove('hidden');
+      canvasControls.classList.remove('hidden');
+      canvasMeta.classList.remove('hidden');
+
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      canvasMeta.innerText = `${canvas.width} x ${canvas.height} px`;
+    }
+
+    // Canvas: Draw Neon Bounding Boxes
+    function drawBoundingBoxes(img, predictions) {
+      // Re-draw original image
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      if (!predictions || predictions.length === 0) {
+        return;
+      }
+
+      predictions.forEach((pred) => {
+        // Roboflow returns x, y as the CENTER of the bounding box
+        const width = pred.width;
+        const height = pred.height;
+        const x = pred.x - width / 2;
+        const y = pred.y - height / 2;
+
+        const confidencePercent = Math.round((pred.confidence || 0.9) * 100);
+        const label = `${pred.class.toUpperCase()} ${confidencePercent}%`;
+
+        // 1. Neon glowing box
+        ctx.save();
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = Math.max(3, Math.round(canvas.width / 350));
+        ctx.strokeRect(x, y, width, height);
+
+        // 2. Subtle translucent inner fill
+        ctx.fillStyle = 'rgba(0, 255, 136, 0.12)';
+        ctx.fillRect(x, y, width, height);
+
+        // 3. Label Pill Badge
+        const fontSize = Math.max(14, Math.round(canvas.width / 50));
+        ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+        const textWidth = ctx.measureText(label).width;
+        const pillHeight = fontSize + 10;
+        const pillWidth = textWidth + 16;
+        const pillY = Math.max(0, y - pillHeight);
+
+        // Background of label
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(x, pillY, pillWidth, pillHeight);
+
+        // Pill border
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, pillY, pillWidth, pillHeight);
+
+        // Pill Text
+        ctx.fillStyle = '#00ff88';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + 8, pillY + (pillHeight / 2));
+
+        ctx.restore();
+      });
+    }
+
+    // Render Stats
+    function renderStats(stats) {
+      statsCard.classList.remove('hidden');
+      statIngredients.innerText = stats.detectedCount ?? 0;
+      statBoxes.innerText = stats.boundingBoxesCount ?? 0;
+      statLatency.innerText = `${stats.processingTimeMs ?? 0}ms`;
+    }
+
+    // Render Ingredients Badges
+    function renderIngredients(ingredients) {
+      ingredientCountBadge.innerText = ingredients.length;
+      ingredientsList.innerHTML = '';
+
+      if (ingredients.length === 0) {
+        ingredientsList.innerHTML = '<p class="text-xs text-amber-400 italic">No clear ingredients detected in this image.</p>';
+        return;
+      }
+
+      const iconMap = {
+        apple: '🍎',
+        banana: '🍌',
+        orange: '🍊',
+        tomato: '🍅',
+        carrot: '🥕',
+        potato: '🥔',
+        lemon: '🍋',
+        onion: '🧅',
+        cucumber: '🥒',
+        broccoli: '🥦',
+        spinach: '🥬',
+        strawberry: '🍓',
+        grape: '🍇',
+        pepper: '🫑'
+      };
+
+      ingredients.forEach(ing => {
+        const icon = iconMap[ing] || '🥗';
+        const badge = document.createElement('div');
+        badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-medium text-xs hover:border-emerald-400 transition-all shadow-sm';
+        badge.innerHTML = `
+          <span>${icon}</span>
+          <span class="capitalize font-semibold">${ing}</span>
+        `;
+        ingredientsList.appendChild(badge);
+      });
+    }
+
+    // Render Recipes
+    function renderRecipes(recipes) {
+      currentRecipesData = recipes;
+      recipesGrid.innerHTML = '';
+      recipesMetaPill.classList.remove('hidden');
+      recipesMetaPill.innerText = `${recipes.length} Recipe${recipes.length === 1 ? '' : 's'} available`;
+
+      if (!recipes || recipes.length === 0) {
+        recipesGrid.innerHTML = `
+          <div class="col-span-full glass-card rounded-2xl p-10 text-center">
+            <i class="fa-solid fa-plate-wheat text-4xl text-slate-600 mb-3 block"></i>
+            <h4 class="text-slate-300 font-semibold mb-1">No recipes found with these ingredients</h4>
+            <p class="text-xs text-slate-500">Try combining different ingredients or capturing a broader selection.</p>
+          </div>
+        `;
+        return;
+      }
+
+      recipes.forEach((recipe, idx) => {
+        const card = document.createElement('div');
+        card.className = 'glass-card glass-card-hover rounded-2xl overflow-hidden flex flex-col group';
+
+        const usedCount = recipe.usedIngredientCount || 0;
+        const missedCount = recipe.missedIngredientCount || 0;
+
+        card.innerHTML = `
+          <!-- Recipe Image -->
+          <div class="relative h-48 w-full overflow-hidden bg-slate-900">
+            <img src="${recipe.image || 'https://via.placeholder.com/400x300?text=Recipe'}" 
+                 alt="${recipe.title}" 
+                 class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                 onerror="this.src='https://via.placeholder.com/400x300?text=Dish'" />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+            
+            <div class="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md border border-slate-700 text-xs text-amber-300 font-mono">
+              <i class="fa-solid fa-heart text-[10px] text-rose-500"></i> ${recipe.likes || 12}
+            </div>
+          </div>
+
+          <!-- Recipe Body -->
+          <div class="p-5 flex flex-col flex-grow justify-between space-y-4">
+            <div>
+              <h3 class="font-bold text-white text-base leading-snug group-hover:text-indigo-400 transition-colors line-clamp-2">
+                ${recipe.title}
+              </h3>
+
+              <!-- Ingredients Match Tags -->
+              <div class="flex items-center gap-2 mt-3 text-xs">
+                <span class="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-medium">
+                  ✓ ${usedCount} In Stock
+                </span>
+                ${missedCount > 0 ? `
+                  <span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
+                    +${missedCount} Needed
+                  </span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded-md bg-indigo-950/60 border border-indigo-500/30 text-indigo-300">
+                    ★ Ready to Cook!
+                  </span>
+                `}
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <button onclick="openRecipeModal(${idx})" class="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                <span>View Details</span>
+                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+              </button>
+            </div>
+          </div>
+        `;
+
+        recipesGrid.appendChild(card);
+      });
+    }
+
+    // Modal Interaction
+    function openRecipeModal(index) {
+      const recipe = currentRecipesData[index];
+      if (!recipe) return;
+
+      document.getElementById('modalTitle').innerText = recipe.title;
+      
+      let usedHtml = '';
+      if (recipe.usedIngredients && recipe.usedIngredients.length > 0) {
+        usedHtml = `
+          <div>
+            <h5 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-check"></i> Ingredients you have:
+            </h5>
+            <ul class="space-y-1 text-xs text-slate-300">
+              ${recipe.usedIngredients.map(i => `<li class="flex items-center gap-2 bg-emerald-950/20 border border-emerald-500/20 p-2 rounded-lg"><span class="text-emerald-400">•</span> ${i.original || i.name}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let missedHtml = '';
+      if (recipe.missedIngredients && recipe.missedIngredients.length > 0) {
+        missedHtml = `
+          <div>
+            <h5 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-plus"></i> Additional ingredients required:
+            </h5>
+            <ul class="space-y-1 text-xs text-slate-300">
+              ${recipe.missedIngredients.map(i => `<li class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-2 rounded-lg"><span class="text-amber-400">•</span> ${i.original || i.name}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      const content = `
+        <div class="space-y-4">
+          <img src="${recipe.image}" alt="${recipe.title}" class="w-full h-48 object-cover rounded-xl border border-slate-800" />
+          ${usedHtml}
+          ${missedHtml}
+          <div class="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs text-indigo-300 flex items-start gap-2">
+            <i class="fa-solid fa-lightbulb mt-0.5 text-indigo-400"></i>
+            <span>Culinary Tip: You can substitute missing ingredients with pantry alternatives or similar spices.</span>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('modalContent').innerHTML = content;
+      
+      // External link button points to recipe search
+      const querySearch = encodeURIComponent(recipe.title);
+      document.getElementById('modalExternalBtn').href = `https://www.google.com/search?q=recipe+${querySearch}`;
+
+      document.getElementById('recipeModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('recipeModal').classList.add('hidden');
+    }
+
+    // Reset Application State
+    function resetApp() {
+      fileInput.value = '';
+      currentLoadedImage = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.classList.add('hidden');
+      canvasControls.classList.add('hidden');
+      canvasMeta.classList.add('hidden');
+      canvasPlaceholder.classList.remove('hidden');
+      statsCard.classList.add('hidden');
+      ingredientsList.innerHTML = '<p class="text-xs text-slate-500 italic">No ingredients identified yet.</p>';
+      ingredientCountBadge.innerText = '0';
+      recipesGrid.innerHTML = `
+        <div class="col-span-full glass-card rounded-2xl p-12 text-center text-slate-500">
+          <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-600 flex items-center justify-center mx-auto mb-4 text-2xl">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+          <h4 class="text-slate-300 font-semibold mb-1">No recipes generated yet</h4>
+          <p class="text-xs text-slate-500 max-w-md mx-auto">Upload an image of your ingredients or click one of the test presets above to discover personalized dishes.</p>
+        </div>
+      `;
+      recipesMetaPill.classList.add('hidden');
+    }
+
+    // Quick Test Demo Generator (Synthesizes demo images on an offscreen canvas)
+    function loadSampleImage(preset) {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = 800;
+      offscreen.height = 600;
+      const oCtx = offscreen.getContext('2d');
+
+      // Kitchen cutting board gradient backdrop
+      const grad = oCtx.createLinearGradient(0, 0, 800, 600);
+      grad.addColorStop(0, '#1e293b');
+      grad.addColorStop(1, '#0f172a');
+      oCtx.fillStyle = grad;
+      oCtx.fillRect(0, 0, 800, 600);
+
+      // Cutting board
+      oCtx.fillStyle = '#334155';
+      oCtx.roundRect ? oCtx.roundRect(100, 80, 600, 440, 24) : oCtx.fillRect(100, 80, 600, 440);
+      oCtx.fill();
+
+      oCtx.textAlign = 'center';
+      oCtx.textBaseline = 'middle';
+
+      if (preset === 'apple_banana') {
+        oCtx.font = '120px sans-serif';
+        oCtx.fillText('🍎', 320, 280);
+        oCtx.fillText('🍌', 520, 310);
+      } else if (preset === 'tomatoes_lettuce') {
+        oCtx.font = '120px sans-serif';
+        oCtx.fillText('🍅', 330, 280);
+        oCtx.fillText('🥬', 510, 310);
+      } else if (preset === 'carrots_oranges') {
+        oCtx.font = '120px sans-serif';
+        oCtx.fillText('🥕', 330, 280);
+        oCtx.fillText('🍊', 520, 310);
+      }
+
+      // Banner text
+      oCtx.fillStyle = '#94a3b8';
+      oCtx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
+      oCtx.fillText('Smart Chef — Hackathon Demo Sample', 400, 470);
+
+      const dataUrl = offscreen.toDataURL('image/jpeg', 0.95);
+      processImage(dataUrl);
+    }
+  </script>
+</body>
+</html>
