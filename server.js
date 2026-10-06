@@ -18,6 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Helper to sanitize and retrieve API Keys from environment
 const getRoboflowKey = () => (
   process.env.ROBOFLOW_API_KEY || 
+  process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY ||
   process.env.ROBOFLOW_KEY || 
   process.env.roboflow_api_key || 
   ''
@@ -25,6 +26,7 @@ const getRoboflowKey = () => (
 
 const getRapidApiKey = () => (
   process.env.RAPIDAPI_KEY || 
+  process.env.NEXT_PUBLIC_RAPIDAPI_KEY ||
   process.env.RAPID_API_KEY || 
   process.env.rapidapi_key || 
   ''
