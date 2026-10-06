@@ -149,7 +149,7 @@
       <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg mt-0.5"></i>
       <div class="text-sm">
         <p class="font-semibold text-amber-300">Demo Mode Active</p>
-        <p class="text-amber-200/80 mt-0.5">To enable live inference with your own accounts, add your keys to <code class="bg-black/40 px-1 py-0.5 rounded font-mono">ROBOFLOW_API_KEY</code> and <code class="bg-black/40 px-1 py-0.5 rounded font-mono">RAPIDAPI_KEY</code> in your <code class="bg-black/40 px-1 py-0.5 rounded font-mono">.env</code> file.</p>
+        <p id="apiConfigDesc" class="text-amber-200/80 mt-0.5">To enable live inference with your own accounts, add your keys to <code class="bg-black/40 px-1 py-0.5 rounded font-mono">ROBOFLOW_API_KEY</code> and <code class="bg-black/40 px-1 py-0.5 rounded font-mono">RAPIDAPI_KEY</code> in Vercel Settings or your <code class="bg-black/40 px-1 py-0.5 rounded font-mono">.env</code> file.</p>
       </div>
     </div>
 
@@ -448,14 +448,27 @@
       try {
         const res = await fetch('/api/config-status');
         const data = await res.json();
+        const pingDot = document.getElementById('pingDot');
+        const staticDot = document.getElementById('staticDot');
+        const statusText = document.getElementById('statusText');
+
         if (!data.ready) {
           apiConfigNotice.classList.remove('hidden');
-          const pingDot = document.getElementById('pingDot');
-          const staticDot = document.getElementById('staticDot');
-          const statusText = document.getElementById('statusText');
           if (pingDot) pingDot.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
           if (staticDot) staticDot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
           if (statusText) statusText.innerText = "Demo Mode Active";
+
+          if (data.missing && data.missing.length > 0) {
+            const desc = document.getElementById('apiConfigDesc');
+            if (desc) {
+              desc.innerHTML = `Pending key(s): <strong class="text-amber-300 font-mono">${data.missing.join(', ')}</strong>. Verify in Vercel Settings ➔ Environment Variables and hit <strong>Redeploy</strong>.`;
+            }
+          }
+        } else {
+          apiConfigNotice.classList.add('hidden');
+          if (pingDot) pingDot.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+          if (staticDot) staticDot.className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
+          if (statusText) statusText.innerText = "APIs Connected";
         }
       } catch (e) {
         console.warn('Could not check backend configuration status:', e);

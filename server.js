@@ -15,23 +15,45 @@ app.use(cors());
 // Serve static frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Helper to sanitize and retrieve API Keys from environment
+const getRoboflowKey = () => (
+  process.env.ROBOFLOW_API_KEY || 
+  process.env.ROBOFLOW_KEY || 
+  process.env.roboflow_api_key || 
+  ''
+).trim().replace(/^['"]|['"]$/g, '');
+
+const getRapidApiKey = () => (
+  process.env.RAPIDAPI_KEY || 
+  process.env.RAPID_API_KEY || 
+  process.env.rapidapi_key || 
+  ''
+).trim().replace(/^['"]|['"]$/g, '');
+
 // Check status of API keys configuration
 app.get('/api/config-status', (req, res) => {
+  const roboflowKey = getRoboflowKey();
+  const rapidApiKey = getRapidApiKey();
+
   const roboflowConfigured = Boolean(
-    process.env.ROBOFLOW_API_KEY && 
-    process.env.ROBOFLOW_API_KEY !== 'your_roboflow_api_key_here' &&
-    process.env.ROBOFLOW_API_KEY !== 'tu_roboflow_api_key_aqui'
+    roboflowKey && 
+    roboflowKey !== 'your_roboflow_api_key_here' &&
+    roboflowKey !== 'tu_roboflow_api_key_aqui'
   );
   const rapidApiConfigured = Boolean(
-    process.env.RAPIDAPI_KEY && 
-    process.env.RAPIDAPI_KEY !== 'your_rapidapi_key_here' &&
-    process.env.RAPIDAPI_KEY !== 'tu_rapidapi_key_aqui'
+    rapidApiKey && 
+    rapidApiKey !== 'your_rapidapi_key_here' &&
+    rapidApiKey !== 'tu_rapidapi_key_aqui'
   );
 
   res.json({
     roboflowConfigured,
     rapidApiConfigured,
-    ready: roboflowConfigured && rapidApiConfigured
+    ready: roboflowConfigured && rapidApiConfigured,
+    missing: [
+      !roboflowConfigured ? 'ROBOFLOW_API_KEY' : null,
+      !rapidApiConfigured ? 'RAPIDAPI_KEY' : null
+    ].filter(Boolean)
   });
 });
 
@@ -48,8 +70,8 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    const roboflowKey = process.env.ROBOFLOW_API_KEY;
-    const rapidApiKey = process.env.RAPIDAPI_KEY;
+    const roboflowKey = getRoboflowKey();
+    const rapidApiKey = getRapidApiKey();
 
     // Check credentials readiness
     const isRoboflowMock = !roboflowKey || 
@@ -59,6 +81,7 @@ app.post('/api/analyze', async (req, res) => {
     const isRapidApiMock = !rapidApiKey || 
       rapidApiKey === 'your_rapidapi_key_here' || 
       rapidApiKey === 'tu_rapidapi_key_aqui';
+
 
     if (isRoboflowMock || isRapidApiMock) {
       console.warn('⚠️ One or more API Keys are not configured in .env. Running in Demo Mode.');
