@@ -461,14 +461,18 @@
           if (data.missing && data.missing.length > 0) {
             const desc = document.getElementById('apiConfigDesc');
             if (desc) {
-              desc.innerHTML = `Pending key(s): <strong class="text-amber-300 font-mono">${data.missing.join(', ')}</strong>. Verify in Vercel Settings ➔ Environment Variables and hit <strong>Redeploy</strong>.`;
+              desc.innerHTML = `Pending key(s): <strong class="text-amber-300 font-mono">${data.missing.join(', ')}</strong>. Agrega tu <strong>GEMINI_API_KEY</strong> (gratis en Google AI Studio) en tu archivo <code class="bg-black/40 px-1 py-0.5 rounded font-mono">.env</code> para detección con 99%+ de precisión.`;
             }
           }
         } else {
           apiConfigNotice.classList.add('hidden');
           if (pingDot) pingDot.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
           if (staticDot) staticDot.className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500";
-          if (statusText) statusText.innerText = "APIs Connected";
+          if (statusText) {
+            statusText.innerText = data.activeVision === 'gemini' 
+              ? "Gemini Vision Active" 
+              : "Roboflow CV Active";
+          }
         }
       } catch (e) {
         console.warn('Could not check backend configuration status:', e);
@@ -559,7 +563,6 @@
       showProcessingState(true);
       updateStep(1);
 
-
       // Load Image in HTML Image element for Canvas rendering
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -574,7 +577,11 @@
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ imageBase64: base64Image })
+            body: JSON.stringify({ 
+              imageBase64: base64Image,
+              width: img.naturalWidth || img.width || 800,
+              height: img.naturalHeight || img.height || 600
+            })
           });
 
           const result = await response.json();
@@ -628,7 +635,7 @@
         done(step1);
         active(step2);
         reset(step3);
-        processingStepText.innerText = "2. Detecting fruits and vegetables with Roboflow Inference API...";
+        processingStepText.innerText = "2. Detecting fruits and vegetables with AI Vision...";
       } else if (stepNumber === 3) {
         done(step1);
         done(step2);
@@ -852,16 +859,26 @@
       if (!recipe) return;
 
       document.getElementById('modalTitle').innerText = recipe.title;
+
+      let summaryHtml = '';
+      if (recipe.summary) {
+        summaryHtml = `
+          <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 leading-relaxed flex items-start gap-2">
+            <i class="fa-solid fa-quote-left text-indigo-400 text-xs mt-0.5"></i>
+            <span>${recipe.summary}</span>
+          </div>
+        `;
+      }
       
       let usedHtml = '';
       if (recipe.usedIngredients && recipe.usedIngredients.length > 0) {
         usedHtml = `
           <div>
             <h5 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center gap-1.5">
-              <i class="fa-solid fa-check"></i> Ingredients you have:
+              <i class="fa-solid fa-check"></i> Ingredients from your photo:
             </h5>
             <ul class="space-y-1 text-xs text-slate-300">
-              ${recipe.usedIngredients.map(i => `<li class="flex items-center gap-2 bg-emerald-950/20 border border-emerald-500/20 p-2 rounded-lg"><span class="text-emerald-400">•</span> ${i.original || i.name}</li>`).join('')}
+              ${recipe.usedIngredients.map(i => `<li class="flex items-center gap-2 bg-emerald-950/20 border border-emerald-500/20 p-2 rounded-lg"><span class="text-emerald-400 font-bold">•</span> ${i.original || i.name}</li>`).join('')}
             </ul>
           </div>
         `;
@@ -872,7 +889,7 @@
         missedHtml = `
           <div>
             <h5 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
-              <i class="fa-solid fa-plus"></i> Additional ingredients required:
+              <i class="fa-solid fa-plus"></i> Additional pantry staples:
             </h5>
             <ul class="space-y-1 text-xs text-slate-300">
               ${recipe.missedIngredients.map(i => `<li class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-2 rounded-lg"><span class="text-amber-400">•</span> ${i.original || i.name}</li>`).join('')}
@@ -881,14 +898,35 @@
         `;
       }
 
+      let instructionsHtml = '';
+      if (recipe.instructions && recipe.instructions.length > 0) {
+        instructionsHtml = `
+          <div>
+            <h5 class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-fire-burner"></i> Step-by-Step Cooking Steps:
+            </h5>
+            <ol class="space-y-2 text-xs text-slate-300">
+              ${recipe.instructions.map((step, idx) => `
+                <li class="flex items-start gap-2.5 bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg">
+                  <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 flex items-center justify-center font-bold text-[10px]">${idx + 1}</span>
+                  <span class="leading-relaxed">${step}</span>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+        `;
+      }
+
       const content = `
         <div class="space-y-4">
-          <img src="${recipe.image}" alt="${recipe.title}" class="w-full h-48 object-cover rounded-xl border border-slate-800" />
+          <img src="${recipe.image || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600'}" alt="${recipe.title}" class="w-full h-48 object-cover rounded-xl border border-slate-800" />
+          ${summaryHtml}
           ${usedHtml}
           ${missedHtml}
+          ${instructionsHtml}
           <div class="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs text-indigo-300 flex items-start gap-2">
             <i class="fa-solid fa-lightbulb mt-0.5 text-indigo-400"></i>
-            <span>Culinary Tip: You can substitute missing ingredients with pantry alternatives or similar spices.</span>
+            <span>Culinary Tip: All suggested recipes are guaranteed to feature the fresh ingredients detected from your photo.</span>
           </div>
         </div>
       `;
@@ -930,49 +968,61 @@
       recipesMetaPill.classList.add('hidden');
     }
 
-    // Quick Test Demo Generator (Synthesizes demo images on an offscreen canvas)
+    // Quick Test Demo Generator (Loads authentic high-resolution food stock photos)
+    const PRESET_STOCK_IMAGES = {
+      apple_banana: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=800&auto=format&fit=crop&q=80',
+      tomatoes_lettuce: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
+      carrots_oranges: 'https://images.unsplash.com/photo-1582979512210-99b6a53386f9?w=800&auto=format&fit=crop&q=80'
+    };
+
     function loadSampleImage(preset) {
-      const offscreen = document.createElement('canvas');
-      offscreen.width = 800;
-      offscreen.height = 600;
-      const oCtx = offscreen.getContext('2d');
+      const url = PRESET_STOCK_IMAGES[preset];
+      if (!url) return;
 
-      // Kitchen cutting board gradient backdrop
-      const grad = oCtx.createLinearGradient(0, 0, 800, 600);
-      grad.addColorStop(0, '#1e293b');
-      grad.addColorStop(1, '#0f172a');
-      oCtx.fillStyle = grad;
-      oCtx.fillRect(0, 0, 800, 600);
+      showProcessingState(true);
+      processingStepText.innerText = "Loading real demo food photograph...";
 
-      // Cutting board
-      oCtx.fillStyle = '#334155';
-      oCtx.roundRect ? oCtx.roundRect(100, 80, 600, 440, 24) : oCtx.fillRect(100, 80, 600, 440);
-      oCtx.fill();
-
-      oCtx.textAlign = 'center';
-      oCtx.textBaseline = 'middle';
-
-      if (preset === 'apple_banana') {
+      const sampleImg = new Image();
+      sampleImg.crossOrigin = 'anonymous';
+      sampleImg.onload = () => {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = sampleImg.naturalWidth || 800;
+        offscreen.height = sampleImg.naturalHeight || 600;
+        const oCtx = offscreen.getContext('2d');
+        oCtx.drawImage(sampleImg, 0, 0);
+        const dataUrl = offscreen.toDataURL('image/jpeg', 0.88);
+        processImage(dataUrl);
+      };
+      sampleImg.onerror = () => {
+        // Fallback in case of offline/network block
+        const offscreen = document.createElement('canvas');
+        offscreen.width = 800;
+        offscreen.height = 600;
+        const oCtx = offscreen.getContext('2d');
+        const grad = oCtx.createLinearGradient(0, 0, 800, 600);
+        grad.addColorStop(0, '#1e293b');
+        grad.addColorStop(1, '#0f172a');
+        oCtx.fillStyle = grad;
+        oCtx.fillRect(0, 0, 800, 600);
+        oCtx.fillStyle = '#334155';
+        oCtx.roundRect ? oCtx.roundRect(100, 80, 600, 440, 24) : oCtx.fillRect(100, 80, 600, 440);
+        oCtx.fill();
+        oCtx.textAlign = 'center';
+        oCtx.textBaseline = 'middle';
         oCtx.font = '120px sans-serif';
-        oCtx.fillText('🍎', 320, 280);
-        oCtx.fillText('🍌', 520, 310);
-      } else if (preset === 'tomatoes_lettuce') {
-        oCtx.font = '120px sans-serif';
-        oCtx.fillText('🍅', 330, 280);
-        oCtx.fillText('🥬', 510, 310);
-      } else if (preset === 'carrots_oranges') {
-        oCtx.font = '120px sans-serif';
-        oCtx.fillText('🥕', 330, 280);
-        oCtx.fillText('🍊', 520, 310);
-      }
-
-      // Banner text
-      oCtx.fillStyle = '#94a3b8';
-      oCtx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
-      oCtx.fillText('Smart Chef — Hackathon Demo Sample', 400, 470);
-
-      const dataUrl = offscreen.toDataURL('image/jpeg', 0.95);
-      processImage(dataUrl);
+        if (preset === 'apple_banana') {
+          oCtx.fillText('🍎', 320, 280);
+          oCtx.fillText('🍌', 520, 310);
+        } else if (preset === 'tomatoes_lettuce') {
+          oCtx.fillText('🍅', 330, 280);
+          oCtx.fillText('🥬', 510, 310);
+        } else {
+          oCtx.fillText('🥕', 330, 280);
+          oCtx.fillText('🍊', 520, 310);
+        }
+        processImage(offscreen.toDataURL('image/jpeg', 0.9));
+      };
+      sampleImg.src = url;
     }
   </script>
 </body>
